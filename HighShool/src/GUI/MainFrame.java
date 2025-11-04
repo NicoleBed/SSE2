@@ -36,13 +36,7 @@ public class MainFrame extends JFrame {
 	 */
 	public MainFrame() {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 450, 300);
-		//cardPanel = new JPanel();
-		//cardPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		//setContentPane(cardPanel);
-		//contentPane.setLayout(new CardLayout(0, 0));
-		//CardLayout cl = new CardLayout();
-		//cardPanel.setLayout(cl);
+		setBounds(100, 100, 550, 500);
 		cardLayout = new CardLayout(0,0);
 		cardPanel = new JPanel(cardLayout);
 		setContentPane(cardPanel);

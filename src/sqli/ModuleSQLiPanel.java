@@ -1,182 +1,175 @@
 package sqli;
 
-import GUI.MainFrame;
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 
-/**
- * Safe SQL Injection demo stub (no DB, local only).
- *
- * Back button tries 3 strategies:
- *  1) call mainFrame.showCard("Menu")
- *  2) find CardLayout in ancestor window and switch to "Menu"
- *  3) close the top-level window as a last-resort fallback
- *
- * This prevents the situation where the visible card is not switching even though
- * showCard(...) was called on a different MainFrame instance.
- */
+/*
+ SQLi demo.
+ There is one input with three hints and potential injection queries that bypass the password.
+*/
+
 public class ModuleSQLiPanel extends JPanel {
-    private final MainFrame mainFrame;
-    private final JTextField tfUser;
-    private final JPasswordField tfPass;
-    private final JTextArea taOutput;
+    private final JTextField tf; //input field where the student types a password
+    private final JTextArea explanation; //shows the feedback, examples, hints, and lesson text
+    private final String REAL = "apple123"; //The real password
+    private int hintCount = 0; // The order for when the demo is pressed
 
-    public ModuleSQLiPanel(MainFrame mainFrame) {
-        this.mainFrame = mainFrame;
-        setLayout(null);
-        setBackground(Color.WHITE);
+    
+    public ModuleSQLiPanel() {
+        setLayout(new BorderLayout(8,8));
+        setBackground(Color.white);
 
-        JLabel title = new JLabel("SQL Injection (Demo Stub)");
-        title.setFont(new Font("SansSerif", Font.BOLD, 20));
-        title.setBounds(260, 10, 400, 30);
-        add(title);
+        // creates the title for the game
+        JLabel title = new JLabel("Guess the Password", JLabel.CENTER);
+        title.setFont(new Font("SansSerif", Font.BOLD, 16));
+        add(title, BorderLayout.NORTH);
 
-        JLabel lblUser = new JLabel("Username:");
-        lblUser.setBounds(20, 70, 80, 25);
-        add(lblUser);
+        
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 12));
+        row.add(new JLabel("Password:"));
+        tf = new JTextField(18);
+        row.add(tf);
 
-        tfUser = new JTextField();
-        tfUser.setBounds(120, 70, 560, 25);
-        add(tfUser);
+        JButton tryBtn = new JButton("Try");
+        tryBtn.addActionListener(this::onTry);
+        row.add(tryBtn);
 
-        JLabel lblPass = new JLabel("Password:");
-        lblPass.setBounds(20, 110, 80, 25);
-        add(lblPass);
+        JButton hintBtn = new JButton("Hint");
+        hintBtn.addActionListener(this::onHint);
+        row.add(hintBtn);
 
-        tfPass = new JPasswordField();
-        tfPass.setBounds(120, 110, 560, 25);
-        add(tfPass);
+        // The what's this button explaining everything
+        JButton whatsBtn = new JButton("What's this");
+        whatsBtn.setToolTipText("Full explanation of the demo and why it matters");
+        whatsBtn.addActionListener(this::onWhatsThis);
+        row.add(whatsBtn);
 
-        JButton btnTry = new JButton("Try (Insecure)");
-        btnTry.setBounds(20, 160, 140, 30);
-        btnTry.addActionListener(e -> doInsecureTry());
-        add(btnTry);
+        add(row, BorderLayout.CENTER);
 
-        JButton btnMain = new JButton("Main Menu");
-        btnMain.setBounds(180, 160, 120, 30);
-        btnMain.addActionListener(e -> navigateBackToMenu(e));
-        add(btnMain);
-
-        taOutput = new JTextArea();
-        taOutput.setEditable(false);
-        taOutput.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        taOutput.setLineWrap(true);
-        taOutput.setWrapStyleWord(true);
-        JScrollPane sp = new JScrollPane(taOutput);
-        sp.setBounds(0, 210, 800, 230);
-        add(sp);
-
-        // initial text
-        taOutput.setText("INSECURE QUERY (demo):\n\n");
+        // The explanation area for every action
+        explanation = new JTextArea();
+        explanation.setEditable(false);
+        explanation.setLineWrap(true);
+        explanation.setWrapStyleWord(true);
+        explanation.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        explanation.setText("Play: guess the password. Use Hint if stuck.");
+        JScrollPane sp = new JScrollPane(explanation);
+        sp.setPreferredSize(new Dimension(600, 160));
+        add(sp, BorderLayout.SOUTH);
     }
 
-    private void doInsecureTry() {
-        String user = tfUser.getText();
-        String pass = new String(tfPass.getPassword());
-
-        // construct an insecure concatenated query (demo only)
-        String query = "SELECT * FROM users WHERE username = '" + user + "' AND password = '" + pass + "'";
-        StringBuilder out = new StringBuilder();
-        out.append("INSECURE QUERY (demo):\n");
-        out.append(query).append("\n\n");
-
-        // very simple heuristic to "detect" injection-like payloads for demo
-        boolean injectionLike = looksLikeInjection(user) || looksLikeInjection(pass);
-
-        if (injectionLike) {
-            out.append("Demo result: injection-like input detected (would bypass insecure code).\n\n");
-            out.append("Teaching point: concatenating user input into SQL can allow attackers to change the query logic.");
-        } else {
-            out.append("Demo result: no obvious injection detected (demo).\n\n");
-            out.append("Teaching point: safe code uses parameterized queries / prepared statements instead of string concatenation.");
+    // Text box that shows your actions
+    private void onTry(ActionEvent e) {
+        String raw = tf.getText();
+        if (raw == null) raw = "";
+        raw = raw.trim();
+        if (raw.isEmpty()) {
+            explanation.setText("Type something first.");
+            return;
         }
 
-        taOutput.setText(out.toString());
+        // This auto-wraps tautologies to make input simpler
+        String wrapped = wrapIfTautology(raw);
+
+        // show the SQL that would be constructed (for teaching)
+        String query = "SELECT * FROM users WHERE username = '" + wrapped + "' AND password = '" + wrapped + "'";
+
+        // 1) exact real password check
+        if (raw.equals(REAL)) {
+            explanation.setText("Correct: exact match to stored password.\n\n"
+                    + "Constructed SQL (unsafe demo):\n" + query + "\n\n"
+                    + "Lesson: string concatenation like this lets attackers change the query logic.");
+            return;
+        }
+
+        // 2) injection/tautology detection
+        // If wrapIfTautology changed the input, it is treat it as an injection-like tautology.
+        if (!wrapped.equals(raw) || raw.equalsIgnoreCase("' or 1=1 --") || raw.equalsIgnoreCase("' or 'a'='a' --")) {
+            explanation.setText("Bypassed with SQL injection (tautology).\n\n"
+                    + "Constructed SQL (unsafe demo):\n" + query + "\n\n"
+                    + "Why this works: the injected text turns the WHERE into a condition that's always true.\n"
+                    + "Fix: use prepared statements and parameterized queries instead of concatenation.");
+            return;
+        }
+
+        // 3) nothing matched
+        explanation.setText("Nope. Try again or press Hint.\n\n(If you're testing injection, try typing 1=1 or press Hint.)");
     }
 
-    private boolean looksLikeInjection(String s) {
+    // this detect very simple tautologies students might type: 1=1, a=a, abc=abc
+    private boolean isSimpleTautology(String s) {
         if (s == null) return false;
-        String low = s.toLowerCase();
-        // simple checks for common patterns used in demos
-        if (low.contains("' or ") || low.contains("\" or ") || low.contains("'or'") || low.contains(" or 1=1") ) return true;
-        if (low.contains(";") || low.contains("--") || low.contains("/*") || low.contains("*/")) return true;
-        // injection-like sequences with quotes and equals
-        if (low.matches(".*['\"].*=.*")) return true;
+        String t = s.trim().toLowerCase();
+        // numeric tautology: 1=1, 22=22
+        if (t.matches("^\\d+\\s*=\\s*\\d+$")) {
+            String[] parts = t.split("=");
+            return parts[0].trim().equals(parts[1].trim());
+        }
+        // alphabetic tautology: a=a, abc=abc
+        if (t.matches("^[a-z]+\\s*=\\s*[a-z]+$")) {
+            String[] parts = t.split("=");
+            return parts[0].trim().equals(parts[1].trim());
+        }
         return false;
     }
 
-    /**
-     * Robust navigation to menu. Tries multiple strategies so the UI actually switches
-     * even if there are multiple frames or the panel was constructed with a different MainFrame instance.
-     */
-    private void navigateBackToMenu(ActionEvent ev) {
-        // 1) Preferred: call method on the MainFrame instance if available
-        try {
-            if (mainFrame != null) {
-                System.out.println("[SQLi] Attempting mainFrame.showCard(\"Menu\")");
-                mainFrame.showCard("Menu");
-                // small delay not required; ensure UI repaint
-                repaint();
-                return;
-            }
-        } catch (Exception ex) {
-            System.err.println("[SQLi] mainFrame.showCard threw: " + ex.getMessage());
-            // fall through to other strategies
+    //If the user types a simple tautology then it gets wrapped
+    // Otherwise return the original input unchanged.
+    private String wrapIfTautology(String input) {
+        if (input == null) return null;
+        if (isSimpleTautology(input)) {
+            return "' OR " + input.trim() + " --";
         }
+        return input;
+    }
 
-        // 2) Fallback: find a CardLayout in the current top-level window and show "Menu"
-        try {
-            Window top = SwingUtilities.getWindowAncestor(this);
-            if (top != null) {
-                boolean switched = switchCardLayoutInContainer(top, "Menu");
-                if (switched) {
-                    System.out.println("[SQLi] Switched card via ancestor CardLayout");
-                    return;
-                }
-            }
-        } catch (Exception ex) {
-            System.err.println("[SQLi] fallback CardLayout switch failed: " + ex.getMessage());
-        }
-
-        // 3) Last-resort: simply close the top-level window (so the user can re-open app)
-        try {
-            Window w = SwingUtilities.getWindowAncestor(this);
-            if (w != null) {
-                System.err.println("[SQLi] Closing top-level window as last-resort fallback.");
-                w.dispose();
-            }
-        } catch (Exception ex) {
-            ex.printStackTrace();
+    // This gives the user three hints
+    private void onHint(ActionEvent e) {
+        hintCount = Math.min(hintCount + 1, 3);
+        if (hintCount == 1) {
+            explanation.setText("Hint 1: It's a fruit plus some numbers.");
+        } else if (hintCount == 2) {
+            explanation.setText("Hint 2: Think how to make the check always true.\n"
+                    + "Try typing 1=1 (the demo will auto-wrap it).");
+        } else { // third press shows short explicit example and a short safety note
+            explanation.setText("Hint 3 (explicit): try exactly ' OR 1=1 --\n\n"
+                    + "This shows why we must never concatenate user input into SQL. Use prepared statements.");
         }
     }
 
-    /**
-     * Recursively search for a JPanel with CardLayout and call show(panel, cardName).
-     * Returns true if a switch was performed.
-     */
-    private boolean switchCardLayoutInContainer(Container root, String cardName) {
-        if (root == null) return false;
-        // check this container
-        LayoutManager lm = root.getLayout();
-        if (lm instanceof CardLayout && root instanceof JPanel) {
-            try {
-                CardLayout cl = (CardLayout) lm;
-                cl.show((JPanel) root, cardName);
-                root.revalidate();
-                root.repaint();
-                return true;
-            } catch (Exception ignored) {}
-        }
-        // otherwise search children
-        for (Component c : root.getComponents()) {
-            if (c instanceof Container) {
-                boolean done = switchCardLayoutInContainer((Container) c, cardName);
-                if (done) return true;
-            }
-        }
-        return false;
+    //This covers what the demo does, the goal and what an injections query is
+    private void onWhatsThis(ActionEvent e) {
+        String text =
+                "What this demo does\n\n" +
+                "This demo shows why building SQL with string concatenation is unsafe.\n" +
+                "You type a value. The demo builds a SQL query using that text directly.\n\n" +
+                "Goal\n\n" +
+                "Try to guess the real password (apple123). Or try input that makes the WHERE clause always true.\n\n" +
+                "What an injection query is\n\n" +
+                "An injection input changes the SQL logic. For example:\n" +
+                "  ' OR 1=1 --\n" +
+                "This closes the quote, adds a condition that is always true, and comments out the rest.\n\n" +
+                "Why this is bad\n\n" +
+                "If a server used code like this, an attacker could bypass login checks.\n" +
+                "They would not need the real password.\n\n" +
+                "How to fix (short)\n\n" +
+                "Use prepared statements or parameterized queries. Do not concatenate user input.\n" +
+                "Validate input, give minimal error messages, and log suspicious attempts.\n\n" +
+                "How to use the demo\n\n" +
+                "- Type apple123 to see a normal success.\n" +
+                "- Type 1=1 or a=a to try a tautology (demo auto-wraps to show injection).\n" +
+                "- Press Hint for step-by-step help.\n\n" +
+                "That is it. Keep it simple and show the SQL to teach the idea.";
+
+        JTextArea ta = new JTextArea(text);
+        ta.setEditable(false);
+        ta.setLineWrap(true);
+        ta.setWrapStyleWord(true);
+        ta.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        JScrollPane sp = new JScrollPane(ta);
+        sp.setPreferredSize(new Dimension(520, 380));
+
+        JOptionPane.showMessageDialog(this, sp, "About this demo", JOptionPane.INFORMATION_MESSAGE);
     }
 }

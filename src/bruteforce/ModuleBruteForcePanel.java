@@ -1,226 +1,233 @@
 package bruteforce;
 
+import javax.swing.*;
+
 import GUI.MainFrame;
 
-import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 
 /**
- * Brute-force learning module (safe demo).
- *
- * - No network or DB.
- * - Insecure mode: unlimited guesses (simulates vulnerable system).
- * - Secure mode: rate-limited / account lockout after N attempts with cooldown timer.
- *
- * Back button uses mainFrame.showCard("Menu") and falls back to closing the window
- * if mainFrame is null to avoid freezing the UI.
+ * Combination lock demo.
+ *Students will guess a pin and there will be two modes and Insecure mode and a Secure mode.
+ *Insecure will be infinite tries, and secure will be limited tries.
+ * 
  */
+
 public class ModuleBruteForcePanel extends JPanel {
-    private final MainFrame mainFrame;
+    private final JTextField tf;               // this is for where student types the PIN guess
+    private final JTextArea explanation;       // this shows feedback and lesson text
+    private final JLabel statusLabel;          // this shows attempts or locked status
+    private final JButton modeBtn;             // this toggles insecure / secure
+    private final String REAL = "123";         // this is the actual PIN for the demo (changeable)
+    private int attempts = 0;                  // this is the current attempt counter
+    private int hintCount = 0;                 // the cycles of hints (1..3)
+    private boolean secureMode = false;        // false = Insecure, true = Secure
+    private boolean locked = false;            // for whether account is locked
+    private int cooldownSecondsLeft = 0;       // remaining lockout time
+    private javax.swing.Timer cooldownTimer;   // swing timer for cooldown
 
-    // demo state
-    private final String correctPassword = "apple123"; // demo password students can guess
-    private int insecureAttempts = 0;
+    
+    private static final int SECURE_MAX_ATTEMPTS = 5; //the number of failed attempts
+    private static final int SECURE_COOLDOWN_SECONDS = 30; //The time locked after hitting the secure limit
 
-    // secure mode state
-    private int secureAttempts = 0;
-    private final int SECURE_MAX_ATTEMPTS = 5;
-    private boolean secureLocked = false;
-    private javax.swing.Timer secureCooldownTimer;
-    private int secureCooldownSecondsLeft = 0;
-
-    // UI components
-    private final JTextField tfUser;
-    private final JPasswordField tfPass;
-    private final JTextArea taOutput;
-    private final JLabel lblSecureStatus;
-
-    public ModuleBruteForcePanel(MainFrame mainFrame) {
-        this.mainFrame = mainFrame;
-        setLayout(null);
+    public ModuleBruteForcePanel(MainFrame ignored) {
+       
+        setLayout(new BorderLayout(8,8)); 
         setBackground(Color.WHITE);
 
-        JLabel lblTitle = new JLabel("Brute-Force Demo (Try to guess the password)");
-        lblTitle.setFont(new Font("SansSerif", Font.BOLD, 16));
-        lblTitle.setBounds(20, 10, 500, 25);
-        add(lblTitle);
+       
+        JLabel title = new JLabel("Combination Lock (PIN) Demo", JLabel.CENTER);
+        title.setFont(new Font("SansSerif", Font.BOLD, 16));
+        add(title, BorderLayout.NORTH);
 
-        JLabel lblInstr = new JLabel("<html><i>Insecure mode lets attackers try forever.<br>"
-                + "Secure mode locks the account after multiple failures and forces a cooldown.</i></html>");
-        lblInstr.setBounds(20, 40, 600, 40);
-        add(lblInstr);
+        
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 12));
+        row.add(new JLabel("Enter PIN:"));
+        tf = new JTextField(8);
+        row.add(tf);
 
-        JLabel lblUser = new JLabel("Username:");
-        lblUser.setBounds(20, 95, 80, 20);
-        add(lblUser);
+        JButton tryBtn = new JButton("Try");
+        tryBtn.addActionListener(this::onTry);
+        row.add(tryBtn);
 
-        tfUser = new JTextField("student");
-        tfUser.setBounds(100, 95, 160, 22);
-        add(tfUser);
+        JButton hintBtn = new JButton("Hint");
+        hintBtn.addActionListener(this::onHint);
+        row.add(hintBtn);
 
-        JLabel lblPass = new JLabel("Password:");
-        lblPass.setBounds(20, 125, 80, 20);
-        add(lblPass);
+        JButton whatsBtn = new JButton("What's this");
+        whatsBtn.addActionListener(this::onWhatsThis);
+        row.add(whatsBtn);
 
-        tfPass = new JPasswordField();
-        tfPass.setBounds(100, 125, 160, 22);
-        add(tfPass);
+        
+        modeBtn = new JButton("Mode: Insecure");
+        modeBtn.addActionListener(e -> toggleMode());
+        row.add(modeBtn);
 
-        JButton btnTryInsecure = new JButton("Insecure Try");
-        btnTryInsecure.setBounds(280, 95, 140, 25);
-        btnTryInsecure.addActionListener(e -> insecureTry());
-        btnTryInsecure.setToolTipText("Shows how unlimited attempts can be abused.");
-        add(btnTryInsecure);
+        add(row, BorderLayout.CENTER);
 
-        JButton btnTrySecure = new JButton("Secure Try");
-        btnTrySecure.setBounds(280, 125, 140, 25);
-        btnTrySecure.addActionListener(e -> secureTry());
-        btnTrySecure.setToolTipText("Shows lockout after repeated failures.");
-        add(btnTrySecure);
+        
+        JPanel bottom = new JPanel(new BorderLayout(8,8));
+        statusLabel = new JLabel("Attempts: 0");
+        bottom.add(statusLabel, BorderLayout.NORTH);
 
-        lblSecureStatus = new JLabel("Secure status: OK");
-        lblSecureStatus.setBounds(440, 95, 250, 20);
-        add(lblSecureStatus);
+        explanation = new JTextArea();
+        explanation.setEditable(false);
+        explanation.setLineWrap(true);
+        explanation.setWrapStyleWord(true);
+        explanation.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        explanation.setText("Play: guess the 3-digit PIN. Use Hint if stuck.");
+        JScrollPane sp = new JScrollPane(explanation);
+        sp.setPreferredSize(new Dimension(600, 160));
+        bottom.add(sp, BorderLayout.CENTER);
 
-        taOutput = new JTextArea();
-        taOutput.setEditable(false);
-        taOutput.setLineWrap(true);
-        taOutput.setWrapStyleWord(true);
-        JScrollPane sp = new JScrollPane(taOutput);
-        sp.setBounds(20, 165, 670, 220);
-        add(sp);
-
-        JButton btnHint = new JButton("Hint");
-        btnHint.setBounds(20, 400, 90, 26);
-        btnHint.addActionListener(e -> showHint());
-        add(btnHint);
-
-        JButton btnReset = new JButton("Reset Secure");
-        btnReset.setBounds(130, 400, 120, 26);
-        btnReset.addActionListener(e -> resetSecureState());
-        add(btnReset);
-
-        // Robust Back button: uses mainFrame if available; otherwise falls back to closing window.
-        JButton btnBack = new JButton("Back to Menu");
-        btnBack.setBounds(560, 400, 130, 26);
-        btnBack.addActionListener(ev -> {
-            try {
-                if (mainFrame != null) {
-                    // NOTE: ensure MainFrame registers the menu with key "Menu"
-                    mainFrame.showCard("Menu");
-                    System.out.println("[BruteForce] Navigated back to Menu");
-                } else {
-                    System.err.println("[BruteForce] mainFrame is null; closing window as fallback.");
-                    Window w = SwingUtilities.getWindowAncestor((Component) ev.getSource());
-                    if (w != null) w.dispose();
-                }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                Window w = SwingUtilities.getWindowAncestor((Component) ev.getSource());
-                if (w != null) w.dispose();
-            }
-        });
-        add(btnBack);
-
-        taOutput.setText("Welcome to Brute-Force demo.\n\n"
-                + "Try to guess the password using Insecure Try (no limits) and Secure Try (lockout).\n\n"
-                + "Tip: password is a word + number (try simple guesses or the common payloads).");
+        add(bottom, BorderLayout.SOUTH);
     }
 
-    private void insecureTry() {
-        insecureAttempts++;
-        String user = tfUser.getText();
-        String pass = new String(tfPass.getPassword());
+    // The try button functions
+    private void onTry(ActionEvent ev) {
+        // read and normalize input
+        String raw = tf.getText();
+        if (raw == null) raw = "";
+        raw = raw.trim();
 
-        StringBuilder out = new StringBuilder();
-        out.append("=== Insecure Attempt #").append(insecureAttempts).append(" ===\n");
-        out.append("Checking username='").append(user).append("' password='").append(pass).append("'\n");
-
-        if (pass.equals(correctPassword)) {
-            out.append("RESULT: LOGIN SUCCESS (insecure system accepts correct password)\n\n");
-            out.append("Teaching point: Insecure systems with no rate limiting allow repeated automated attempts.");
-        } else {
-            out.append("RESULT: LOGIN FAILED\n\n");
-            out.append("No protections applied — attacker could keep trying.");
-        }
-
-        taOutput.setText(out.toString());
-    }
-
-    private void secureTry() {
-        if (secureLocked) {
-            taOutput.setText("Account is locked. Please wait " + secureCooldownSecondsLeft + " seconds.\n\n"
-                    + "Teaching point: lockout prevents fast repeated guessing.");
+        if (raw.isEmpty()) {
+            explanation.setText("Type a PIN first.");
             return;
         }
 
-        secureAttempts++;
-        String user = tfUser.getText();
-        String pass = new String(tfPass.getPassword());
-
-        StringBuilder out = new StringBuilder();
-        out.append("=== Secure Attempt #").append(secureAttempts).append(" ===\n");
-        out.append("Checking username='").append(user).append("' password='").append(pass).append("'\n");
-
-        if (pass.equals(correctPassword)) {
-            out.append("RESULT: LOGIN SUCCESS (secure system)\n\n");
-            out.append("Teaching point: correct password succeeds; failed attempts count resets on success.");
-            secureAttempts = 0;
-            lblSecureStatus.setText("Secure status: OK");
-        } else {
-            out.append("RESULT: LOGIN FAILED\n\n");
-            if (secureAttempts >= SECURE_MAX_ATTEMPTS) {
-                lockAccountForCooldown(30); // 30 second cooldown
-                out.append("Account locked due to too many failures. Cooldown started (30s).\n");
-                out.append("Teaching point: account lockout slows attackers and blocks fast brute-force.");
-            } else {
-                out.append("Failed attempt " + secureAttempts + " of " + SECURE_MAX_ATTEMPTS + ".\n");
-                out.append("Teaching point: rate limiting or lockout should be enforced.");
-            }
+        // If it is currently locked, this shows remaining time
+        if (locked) {
+            explanation.setText("Locked. Wait " + cooldownSecondsLeft + "s before trying again.");
+            return;
         }
 
-        taOutput.setText(out.toString());
+        // The amount of attempts
+        attempts++;
+        updateStatus();
+
+        // If the guess is correct
+        if (raw.equals(REAL)) {
+            explanation.setText("Unlocked! Correct PIN.\n\n"
+                    + "Lesson: short PINs are low-entropy and easy to guess if attackers try many values.\n"
+                    + "Insecure mode lets attackers try forever. Secure mode locks after repeated failures.");
+            // This will reset the guesses after correct guess
+            attempts = 0;
+            updateStatus();
+            return;
+        }
+
+        // this is for wrong guess handling
+        explanation.setText("Wrong PIN. Try again or press Hint.");
+
+        // If your in secure mode and reach limit the cooldown starts
+        if (secureMode && attempts >= SECURE_MAX_ATTEMPTS) {
+            startCooldown(SECURE_COOLDOWN_SECONDS);
+            explanation.setText("Too many wrong tries. Locked for " + SECURE_COOLDOWN_SECONDS + " seconds.\n\n"
+                    + "Teaching: lockouts slow automated guessing and raise attack cost.");
+        }
     }
 
-    private void lockAccountForCooldown(int seconds) {
-        secureLocked = true;
-        secureCooldownSecondsLeft = seconds;
-        lblSecureStatus.setText("Secure status: LOCKED (" + secureCooldownSecondsLeft + "s)");
-        if (secureCooldownTimer != null && secureCooldownTimer.isRunning()) {
-            secureCooldownTimer.stop();
+    // Click between insecure and secure modes
+    private void toggleMode() {
+        secureMode = !secureMode;
+        modeBtn.setText(secureMode ? "Mode: Secure" : "Mode: Insecure");
+
+        // reset attempts and any lock when switching modes
+        attempts = 0;
+        stopCooldownIfRunning();
+        locked = false;
+        cooldownSecondsLeft = 0;
+        updateStatus();
+
+        explanation.setText(secureMode
+                ? "Secure mode: lock after " + SECURE_MAX_ATTEMPTS + " failed attempts. Cooldown " + SECURE_COOLDOWN_SECONDS + "s."
+                : "Insecure mode: unlimited tries allowed. This is vulnerable to brute-force.");
+    }
+
+    // Start a cooldown lock for the given seconds
+    private void startCooldown(int seconds) {
+        locked = true;
+        cooldownSecondsLeft = seconds;
+        updateStatus();
+
+        if (cooldownTimer != null && cooldownTimer.isRunning()) {
+            cooldownTimer.stop();
         }
-        secureCooldownTimer = new javax.swing.Timer(1000, new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                secureCooldownSecondsLeft--;
-                if (secureCooldownSecondsLeft <= 0) {
-                    secureCooldownTimer.stop();
-                    secureLocked = false;
-                    secureAttempts = 0;
-                    lblSecureStatus.setText("Secure status: OK");
-                    taOutput.setText("Cooldown finished. You can try secure login again.\n\n"
-                            + "Teaching point: choose a lockout policy that balances security and usability.");
-                } else {
-                    lblSecureStatus.setText("Secure status: LOCKED (" + secureCooldownSecondsLeft + "s)");
-                }
+
+        // Timer ticks every 1s to update remaining seconds
+        cooldownTimer = new javax.swing.Timer(1000, e -> {
+            cooldownSecondsLeft--;
+            if (cooldownSecondsLeft <= 0) {
+                cooldownTimer.stop();
+                locked = false;
+                attempts = 0;
+                cooldownSecondsLeft = 0;
+                explanation.setText("Lockout ended. You may try again.");
+                updateStatus();
+            } else {
+                updateStatus();
             }
         });
-        secureCooldownTimer.start();
+        cooldownTimer.start();
     }
 
-    private void resetSecureState() {
-        if (secureCooldownTimer != null) secureCooldownTimer.stop();
-        secureLocked = false;
-        secureAttempts = 0;
-        lblSecureStatus.setText("Secure status: OK");
-        taOutput.setText("Secure state reset. Lockout cleared.");
+    // Stop cooldown timer if it exists
+    private void stopCooldownIfRunning() {
+        if (cooldownTimer != null && cooldownTimer.isRunning()) {
+            cooldownTimer.stop();
+            cooldownTimer = null;
+        }
     }
 
-    private void showHint() {
-        taOutput.setText("Hint: Good passwords are long and not simple words + numbers.\n\n"
-                + "This demo uses 'apple123' as the correct password so you can see the difference between "
-                + "unlimited attempts and a locked account.");
+    // Updates the status of it either being locked or amount of attempts
+    private void updateStatus() {
+        if (locked) {
+            statusLabel.setText("LOCKED (" + cooldownSecondsLeft + "s)");
+        } else {
+            statusLabel.setText("Attempts: " + attempts + (secureMode ? "  [Secure mode]" : "  [Insecure mode]"));
+        }
+    }
+
+    // Goes through three hints
+    private void onHint(ActionEvent ev) {
+        hintCount = Math.min(hintCount + 1, 3);
+        if (hintCount == 1) {
+            explanation.setText("Hint 1: The PIN is three digits.");
+        } else if (hintCount == 2) {
+            explanation.setText("Hint 2: Try simple sequences first (common PINs are easy).");
+        } else {
+            explanation.setText("Hint 3 (explicit): try 123\n\n"
+                    + "Teaching note: this demo uses a weak PIN to show how easy it is to break without limits.");
+        }
+    }
+
+    // A full explanation in the what's this option
+    private void onWhatsThis(ActionEvent ev) {
+        String text =
+                "What this demo does\n\n" +
+                "You guess a short numeric PIN. The demo shows what happens when guesses are allowed.\n\n" +
+                "Goal\n\n" +
+                "See how easy short PINs are to break and how lockouts slow attackers.\n\n" +
+                "Modes\n\n" +
+                "- Insecure: unlimited tries. Attackers can try many values.\n" +
+                "- Secure: locks after a fixed number of failures and forces a cooldown.\n\n" +
+                "Why this matters\n\n" +
+                "Real attackers use automation. Unlimited tries let them try thousands per second.\n" +
+                "Lockouts and rate-limits increase the time and cost to break an account.\n\n" +
+                "How to use\n\n" +
+                "- Type a 3-digit PIN and press Try.\n" +
+                "- Toggle Mode to see the difference between Insecure and Secure.\n" +
+                "- Press Hint for step-by-step help.\n\n" +
+                "That is it.";
+
+        JTextArea ta = new JTextArea(text);
+        ta.setEditable(false);
+        ta.setLineWrap(true);
+        ta.setWrapStyleWord(true);
+        ta.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        JScrollPane sp = new JScrollPane(ta);
+        sp.setPreferredSize(new Dimension(520, 340));
+        JOptionPane.showMessageDialog(this, sp, "About this demo", JOptionPane.INFORMATION_MESSAGE);
     }
 }

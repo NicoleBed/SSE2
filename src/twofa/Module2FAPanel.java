@@ -5,141 +5,118 @@ import GUI.MainFrame;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.util.Random;
 
-/**
- * 2FA learning module (TOTP-like one-time code stub).
- *
- * - No network / SMS / email. Codes are generated locally and expire after 30s.
- * - Demonstrates "something you have" factor (simulated) and code expiry.
- *
- * Back button uses mainFrame.showCard("Menu") and falls back to closing the window
- * if mainFrame is null to avoid freezing the UI.
- */
+/*
+ 2FA demo — Stolen-code scenario. 
+ This demo sends a code and gives 30 seconds for you to enter the code.
+ If you enter the code in time you win, if you run out of time before entering 
+ the right code the code will expire.
+ You can also simulate stolen code.
+*/
 public class Module2FAPanel extends JPanel {
+    
     private final MainFrame mainFrame;
-
-    // code state
     private String currentCode = null;
     private int secondsLeft = 0;
     private javax.swing.Timer codeTimer;
-
-    // UI
-    private final JLabel lblCodeTimer;
+    private final JLabel lblTimer;
     private final JTextField tfCodeInput;
     private final JTextArea taOutput;
+    private final JButton btnSend;
+    private final JButton btnVerify;
+    private final JButton btnSimulate;
+    private static final int EXPIRE_SECONDS = 30;
 
+    
+    //This is for the UI handlers
     public Module2FAPanel(MainFrame mainFrame) {
         this.mainFrame = mainFrame;
         setLayout(null);
         setBackground(Color.WHITE);
 
-        JLabel lblTitle = new JLabel("2FA Demo (One-Time Code Simulator)");
+        JLabel lblTitle = new JLabel("2FA Demo — Stolen-Code Scenario");
         lblTitle.setFont(new Font("SansSerif", Font.BOLD, 16));
-        lblTitle.setBounds(20, 10, 500, 25);
+        lblTitle.setBounds(20, 10, 400, 24);
         add(lblTitle);
 
-        JLabel lblIntro = new JLabel("<html><i>This simulates how a one-time 2FA code works. "
-                + "Press Send Code, then enter the code before it expires (30s).</i></html>");
-        lblIntro.setBounds(20, 40, 600, 40);
-        add(lblIntro);
+        JButton btnBack = new JButton("Back to Menu");
+        btnBack.setBounds(560, 10, 120, 26);
+        btnBack.addActionListener(e -> {
+            if (this.mainFrame != null) this.mainFrame.showCard("Menu");
+        });
+        add(btnBack);
 
-        JButton btnSend = new JButton("Send Code (simulate)");
-        btnSend.setBounds(20, 95, 180, 28);
-        btnSend.addActionListener(e -> sendCode());
+        btnSend = new JButton("Send Code (simulate)");
+        btnSend.setBounds(20, 60, 160, 28);
+        btnSend.addActionListener(this::sendCode);
         add(btnSend);
 
-        lblCodeTimer = new JLabel("No code sent");
-        lblCodeTimer.setBounds(220, 100, 200, 20);
-        add(lblCodeTimer);
+        lblTimer = new JLabel("No code active");
+        lblTimer.setBounds(200, 66, 180, 20);
+        add(lblTimer);
 
         tfCodeInput = new JTextField();
-        tfCodeInput.setBounds(20, 140, 160, 22);
+        tfCodeInput.setBounds(20, 100, 140, 22);
         add(tfCodeInput);
 
-        JButton btnVerify = new JButton("Verify Code");
-        btnVerify.setBounds(200, 138, 120, 26);
-        btnVerify.addActionListener(e -> verifyCode());
+        btnVerify = new JButton("Verify Code");
+        btnVerify.setBounds(180, 98, 120, 26);
+        btnVerify.addActionListener(this::verifyCode);
         add(btnVerify);
 
-        // Optional: simulate stolen code scenario
-        JButton btnSimulateStolen = new JButton("Simulate Stolen Code");
-        btnSimulateStolen.setBounds(340, 138, 170, 26);
-        btnSimulateStolen.addActionListener(e -> simulateStolenCode());
-        add(btnSimulateStolen);
+        btnSimulate = new JButton("Simulate Stolen Code");
+        btnSimulate.setBounds(320, 98, 180, 26);
+        btnSimulate.addActionListener(this::simulateStolenCode);
+        add(btnSimulate);
 
         taOutput = new JTextArea();
         taOutput.setEditable(false);
         taOutput.setLineWrap(true);
         taOutput.setWrapStyleWord(true);
         JScrollPane sp = new JScrollPane(taOutput);
-        sp.setBounds(20, 180, 670, 220);
+        sp.setBounds(20, 140, 660, 260);
         add(sp);
 
-        JButton btnExplain = new JButton("What is this?");
-        btnExplain.setBounds(20, 410, 140, 26);
-        btnExplain.addActionListener(e -> explain2FA());
-        add(btnExplain);
-
-        // Robust Back button (uses mainFrame or falls back)
-        JButton btnBack = new JButton("Back to Menu");
-        btnBack.setBounds(560, 410, 130, 26);
-        btnBack.addActionListener(ev -> {
-            try {
-                if (mainFrame != null) {
-                    // NOTE: ensure MainFrame registers the menu with key "Menu"
-                    mainFrame.showCard("Menu");
-                    System.out.println("[2FA] Navigated back to Menu");
-                } else {
-                    System.err.println("[2FA] mainFrame is null; closing window as fallback.");
-                    Window w = SwingUtilities.getWindowAncestor((Component) ev.getSource());
-                    if (w != null) w.dispose();
-                }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                Window w = SwingUtilities.getWindowAncestor((Component) ev.getSource());
-                if (w != null) w.dispose();
-            }
-        });
-        add(btnBack);
-
-        taOutput.setText("2FA Demo loaded.\n\nClick 'Send Code (simulate)' to generate a six-digit code that expires in 30 seconds.\n"
-                + "This simulates a TOTP or SMS code but runs fully locally. Try entering the code to verify.");
+        taOutput.setText("2FA Demo loaded.\n\nClick 'Send Code (simulate)' to generate a 6-digit code that expires in 30 seconds.\n"
+                + "Use 'Simulate Stolen Code' to see what happens if the secondary factor is compromised.");
     }
 
-    private void sendCode() {
+    // generate and send a 6-digit code
+    private void sendCode(ActionEvent e) {
+        // generate a simple 6-digit code
         currentCode = generateSixDigitCode();
-        secondsLeft = 30;
-        lblCodeTimer.setText("Code valid for: " + secondsLeft + "s");
-        taOutput.setText("Code sent (simulated). The code is: " + currentCode + "\n\n"
-                + "In a real system the code would be delivered via an authenticator app or SMS.\n"
-                + "This demo shows expiration and verification only (no external delivery).");
+        secondsLeft = EXPIRE_SECONDS;
+        lblTimer.setText("Code valid: " + secondsLeft + "s");
 
-        if (codeTimer != null && codeTimer.isRunning()) {
-            codeTimer.stop();
-        }
-        codeTimer = new javax.swing.Timer(1000, new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                secondsLeft--;
-                if (secondsLeft <= 0) {
-                    codeTimer.stop();
-                    currentCode = null;
-                    lblCodeTimer.setText("Code expired");
-                    taOutput.setText("Code expired. Click 'Send Code (simulate)' to generate a new one.");
-                } else {
-                    lblCodeTimer.setText("Code valid for: " + secondsLeft + "s");
-                }
+        taOutput.setText("Code sent (simulated). The code is: " + currentCode + "\n\n"
+                + "In a real system the code would be delivered via SMS or an authenticator app.\n"
+                + "This demo keeps everything local and safe.");
+
+        // this stops any existing timer
+        if (codeTimer != null && codeTimer.isRunning()) codeTimer.stop();
+
+        // this starts countdown timer
+        codeTimer = new javax.swing.Timer(1000, ev -> {
+            secondsLeft--;
+            if (secondsLeft <= 0) {
+                codeTimer.stop();
+                currentCode = null;
+                lblTimer.setText("Code expired");
+                taOutput.setText("Code expired. Click 'Send Code (simulate)' to generate a new one.\n\n"
+                        + "Teaching: short expiry limits the window an attacker can use a stolen code.");
+            } else {
+                lblTimer.setText("Code valid: " + secondsLeft + "s");
             }
         });
         codeTimer.start();
     }
 
-    private void verifyCode() {
+    // This verifies the entered code.
+    private void verifyCode(ActionEvent e) {
         String entered = tfCodeInput.getText().trim();
         if (currentCode == null) {
-            taOutput.setText("No valid code. Click 'Send Code (simulate)' to generate a new code.");
+            taOutput.setText("No valid code. Click 'Send Code (simulate)' to generate one.");
             return;
         }
         if (entered.isEmpty()) {
@@ -148,42 +125,40 @@ public class Module2FAPanel extends JPanel {
         }
         if (entered.equals(currentCode)) {
             taOutput.setText("Verification success! 2FA code accepted.\n\n"
-                    + "Teaching point: 2FA adds 'something you have' to the password factor, stopping attackers even if they have the password.");
-            // reset code after success
+                    + "Teaching: 2FA adds a second factor and reduces risk if the password is compromised.\n"
+                    + "Note: If an attacker also has the code (stolen), 2FA may be bypassed — see 'Simulate Stolen Code'.");
+           
             if (codeTimer != null) codeTimer.stop();
             currentCode = null;
-            lblCodeTimer.setText("No code sent");
+            lblTimer.setText("No code active");
         } else {
             taOutput.setText("Verification failed. The code you entered is incorrect.\n\n"
                     + "Tip: Codes expire quickly; make sure you enter the current code.");
         }
     }
 
-    private void simulateStolenCode() {
+    // The option to simulate attacker having the current code.
+    private void simulateStolenCode(ActionEvent e) {
         if (currentCode == null) {
-            taOutput.setText("No active code to steal. Click 'Send Code (simulate)' first, then use 'Simulate Stolen Code'.");
+            taOutput.setText("No active code to steal. Click 'Send Code (simulate)' first.");
             return;
         }
-        // Simulate attacker having the code; but since this is a simulation, show a teaching message.
+        
         taOutput.setText("Simulated stolen-code scenario:\n\n"
-                + "An attacker got the secondary code. If the attacker also knows the password, they can access the account.\n\n"
-                + "Teaching point: 2FA reduces risk but is not a silver bullet; protect secondary channels and consider phishing-resistant methods (e.g., security keys).");
-        // Optionally clear the code to simulate that the attacker used it
-        currentCode = null;
+                + "An attacker obtained the current 2FA code. If the attacker also knows the password,\n"
+                + "they can access the account. This shows why protecting secondary channels and\n"
+                + "phishing-resistant methods (like security keys) are important.\n\n"
+                + "Teaching: 2FA helps but is not invulnerable if the second factor is compromised.");
+        // This clears the code to simulate it being consumed/used by attacker
         if (codeTimer != null) codeTimer.stop();
-        lblCodeTimer.setText("Code compromised/cleared");
+        currentCode = null;
+        lblTimer.setText("Code compromised/cleared");
     }
 
+    // This generate a simple random 6-digit code as a String (100000-999999).
     private String generateSixDigitCode() {
         Random r = new Random();
         int code = 100000 + r.nextInt(900000);
         return String.valueOf(code);
-    }
-
-    private void explain2FA() {
-        taOutput.setText("What this demo shows:\n\n"
-                + "1) A one-time code is generated and only valid for a short time (30s here).\n"
-                + "2) Even if an attacker knows the password, they usually cannot get the code (unless they also control the user's phone or app).\n"
-                + "3) Real TOTP uses shared secret + time + HMAC; this demo simplifies that to a local code generator for teaching.");
     }
 }

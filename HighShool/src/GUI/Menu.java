@@ -105,6 +105,4 @@ public class Menu extends JPanel {
 		lSoP.setBounds(30, 50, 200, 40);
 		add(lSoP);
 	}
-
 }
-

@@ -8,6 +8,11 @@ import javax.swing.border.EmptyBorder;
 import java.awt.CardLayout;
 
 import Templ.tempMod;
+import M2_Complete_Mediation.m2_Complete_Mediation_GUI;
+import bruteforce.ModuleBruteForcePanel;
+import sqli.ModuleSQLiPanel;
+import twofa.Module2FAPanel;
+import M3_Seperation_Privilege.SeperationofPrivilege;
 
 public class MainFrame extends JFrame {
 
@@ -46,6 +51,21 @@ public class MainFrame extends JFrame {
 		
 		tempMod modul = new tempMod(this);
 		cardPanel.add(modul, "Module_Template");	
+		
+		m2_Complete_Mediation_GUI m2CM_GUI = new m2_Complete_Mediation_GUI(this);
+		cardPanel.add(m2CM_GUI, "Complete_Mediation");
+		
+		ModuleBruteForcePanel mBFP = new ModuleBruteForcePanel(this);
+		cardPanel.add(mBFP, "Brute_Force");
+		
+		ModuleSQLiPanel mSQL = new ModuleSQLiPanel(this);
+		cardPanel.add(mSQL, "SQLi");
+		
+		Module2FAPanel m2FA = new Module2FAPanel(this);
+		cardPanel.add(m2FA, "2FA");
+		
+		SeperationofPrivilege mSOP = new SeperationofPrivilege(this);
+		cardPanel.add(mSOP, "Seperation_Privilege");
 	}
 	
 	public void showCard(String cardName) {

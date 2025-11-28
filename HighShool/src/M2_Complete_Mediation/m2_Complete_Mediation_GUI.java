@@ -54,6 +54,15 @@ public class m2_Complete_Mediation_GUI extends JPanel {
 		//make 15 guests
 		
 		guest_log[] g = {guest1, guest2, guest3, guest4, guest5, guest6, guest7, guest8, guest9, guest10, guest11, guest12, guest13, guest14, guest15};
+
+		JButton MainMenu = new JButton("Main Menu");
+		MainMenu.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				mainFrame.showCard("Main_Menu");
+			}
+		});
+		MainMenu.setBounds(10, 447, 84, 20);
+		add(MainMenu);
 		
 		JLabel nPoints = new JLabel("0");
 		nPoints.setFont(new Font("Georgia", Font.PLAIN, 16));

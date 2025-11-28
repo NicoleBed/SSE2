@@ -9,7 +9,7 @@ import java.awt.event.ActionListener;
  * Demonstrates the concept of Separation of Privilege with a bank deposit box requiring 2 keys to open,
  * along with a real-world analogy of house keys.
  */
-public class SeperationofPrivilege extends JFrame {
+public class SeperationofPrivilege extends JPanel {
 
     private JCheckBox key1Checkbox;
     private JCheckBox key2Checkbox;
@@ -18,18 +18,14 @@ public class SeperationofPrivilege extends JFrame {
     private JButton houseKeyExampleButton;
 
     public SeperationofPrivilege() {
-        setTitle("Separation of Privilege");
-        setSize(450, 350);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null);
         setupUI();
     }
 
     private void setupUI() {
         setLayout(new BorderLayout());
 
-        // Set the JFrame background to blue
-        getContentPane().setBackground(Color.BLUE);
+        // Set the JPanel background to blue
+        setBackground(Color.BLUE);
 
         JLabel titleLabel = new JLabel("Bank Deposit Box with Separation", JLabel.CENTER);
         titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
@@ -57,7 +53,6 @@ public class SeperationofPrivilege extends JFrame {
                 "Try selecting one or both key holders and press the button.");
         JScrollPane scrollPane = new JScrollPane(infoArea);
         scrollPane.setPreferredSize(new Dimension(420, 120));
-        // Set scroll pane viewport background to blue
         scrollPane.getViewport().setBackground(Color.BLUE);
         add(scrollPane, BorderLayout.SOUTH);
 
@@ -85,7 +80,7 @@ public class SeperationofPrivilege extends JFrame {
                 } else {
                     infoArea.setText("Access Denied!\n\n" +
                             "No key holders are present. The deposit box remains locked."
-                    + "Try again with selection");
+                            + "Try again with selection");
                 }
             }
         });
@@ -98,7 +93,12 @@ public class SeperationofPrivilege extends JFrame {
                         "- In secure places like bank deposit boxes or office vaults, two keys " +
                         "ensure better security, preventing a single person from causing a breach.\n\n" +
                         "Use Separation of Privilege when the risk justifies the extra effort!";
-                JOptionPane.showMessageDialog(SeperationofPrivilege.this, message, "House Key Example", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(
+                        null,
+                        message,
+                        "House Key Example",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
             }
         });
     }
@@ -106,9 +106,17 @@ public class SeperationofPrivilege extends JFrame {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                SeperationofPrivilege demo = new SeperationofPrivilege();
-                demo.setVisible(true);
+                JFrame frame = new JFrame("Separation of Privilege");
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                frame.setSize(450, 350);
+                frame.setLocationRelativeTo(null);
+
+                SeperationofPrivilege panel = new SeperationofPrivilege();
+                frame.setContentPane(panel);
+
+                frame.setVisible(true);
             }
         });
     }
 }
+
